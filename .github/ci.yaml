@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Build with MSBuild
+      run: msbuild Magnify10.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+    - name: Sign the executable
+      run: |
+        # Create a self-signed certificate (for testing purposes only)
+        $cert = New-SelfSignedCertificate -DnsName "Test Certificate - For Internal Use Only" -CertStoreLocation "cert:\LocalMachine\My"
+        Export-Certificate -Cert $cert -FilePath testcert.cer
+        Import-Certificate -FilePath testcert.cer -CertStoreLocation 'Cert:\LocalMachine\Root'
+        $thumbprint = $cert.Thumbprint
+
+        # Sign the executable with the self-signed certificate
+        signtool sign /v /s My /n "Test Certificate - For Internal Use Only" /t http://timestamp.verisign.com/scripts/timestamp.dll /fd SHA256 /a /tr http://timestamp.digicert.com Magnify10/bin/Release/Magnify10.exe
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: signed-executable
+        path: Magnify10/bin/Release/Magnify10.exe
